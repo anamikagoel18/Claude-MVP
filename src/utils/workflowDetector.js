@@ -20,7 +20,9 @@ const DELIVERABLE_KEYWORDS = [
   'generate a summary', 'create a report', 'create a brief', 'create a summary',
   'produce a report', 'produce a brief', 'write up a report', 'into a report',
   'into a brief', 'into a summary', 'into a document', 'formatted report',
-  'formatted brief', 'formatted summary', 'output as', 'deliver as'
+  'formatted brief', 'formatted summary', 'output as', 'deliver as',
+  'summary doc', 'summary report', 'summary brief',
+  'format as a', 'format as an'
 ];
 
 // Rule 1 — competitor / product / roadmap / benchmarking keywords

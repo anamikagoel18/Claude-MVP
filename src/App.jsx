@@ -104,14 +104,19 @@ export default function App() {
         let alertWorkflow = s.alertWorkflow || null
         if (totalMessages >= 10 && !s.alertShown) {
           alertShown = true
-          // Find the last user message
           const lastUserMsg = [...updatedMessages].reverse().find(m => m.role === 'user')
           if (lastUserMsg && lastUserMsg.workflowInstance) {
-            // Last message IS a workflow → show Automate option
-            alertState = 'A'
-            alertWorkflow = lastUserMsg.workflowInstance
+            // Last message IS a workflow — check if used before (count >= 2)
+            const wfKey = getWorkflowCountKey(lastUserMsg.workflowInstance)
+            const globalCount = prev.workflowCounts[wfKey] || 0
+            if (globalCount >= 2) {
+              alertState = 'A'
+              alertWorkflow = lastUserMsg.workflowInstance
+            } else {
+              // First time using this workflow — simple message
+              alertState = 'B'
+            }
           } else {
-            // Last message is NOT a workflow → simple 90% message
             alertState = 'B'
           }
         }
@@ -174,14 +179,19 @@ export default function App() {
           let alertWorkflow = s.alertWorkflow || null
           if (totalMessages >= 10 && !s.alertShown) {
             alertShown = true
-            // Find the last user message
             const lastUserMsg = [...updatedMessages].reverse().find(m => m.role === 'user')
             if (lastUserMsg && lastUserMsg.workflowInstance) {
-              // Last message IS a workflow → show Automate option
-              alertState = 'A'
-              alertWorkflow = lastUserMsg.workflowInstance
+              // Last message IS a workflow — check if used before (count >= 2)
+              const wfKey = getWorkflowCountKey(lastUserMsg.workflowInstance)
+              const globalCount = prev.workflowCounts[wfKey] || 0
+              if (globalCount >= 2) {
+                alertState = 'A'
+                alertWorkflow = lastUserMsg.workflowInstance
+              } else {
+                // First time using this workflow — simple message
+                alertState = 'B'
+              }
             } else {
-              // Last message is NOT a workflow → simple 90% message
               alertState = 'B'
             }
           }
