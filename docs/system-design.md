@@ -1,275 +1,168 @@
-# Claude Cowork — Workflow Memory: High-Level System Design
+# Claude Cowork — Workflow Memory: System Design
 
-## 1. Overview
+## System Architecture Diagram
 
-**Workflow Memory** is a feature within Claude Cowork that intelligently detects, tracks, and automates recurring multi-step workflows from natural language prompts. It transforms passive conversations into structured, reusable automation pipelines.
-
-### Core Capabilities
-- **Real-time workflow detection** from natural language prompts
-- **Cross-session pattern aggregation** via keyword-based rule engine
-- **Intelligent automation nudges** triggered by usage frequency
-- **Smart 90% usage alerts** with context-aware workflow suggestions
-- **Scheduled task orchestration** with configurable frequency
+![System Design Diagram](system-design-diagram.png)
 
 ---
 
-## 2. Architecture Overview
+## Component Breakdown
+
+### 1. Client (Browser)
+The end user interacts via a web browser. The entire application runs client-side as a **Single Page Application (SPA)** — no backend server required for the prototype.
+
+### 2. React App (Vite)
+- **Framework:** React 18 with functional components and hooks
+- **Build Tool:** Vite 8 for fast HMR and production builds
+- **Entry Point:** `main.jsx` → renders `App.jsx`
+
+### 3. State Manager (App.jsx)
+The centralized state hub that manages all application data:
+
+| State Field | Type | Purpose |
+|-------------|------|---------|
+| `sessions[]` | Array | All chat sessions with messages |
+| `activeSessionId` | UUID | Currently active chat session |
+| `workflowCounts{}` | Object | Global workflow frequency tracker |
+| `scheduledTasks[]` | Array | Saved automation tasks |
+| `globalMessageCount` | Number | Total user messages across all sessions |
+| `globalAlertShown` | Boolean | Whether 90% alert has fired |
+| `globalAlertState` | 'A' \| 'B' | Alert variant |
+| `toastMessage` | String | ×3 workflow notification text |
+
+### 4. Workflow Detector Engine (`workflowDetector.js`)
+The intelligence layer that analyzes every user prompt:
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                        PRESENTATION LAYER                        │
-│                                                                  │
-│  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌──────────────┐   │
-│  │ HomeView │  │ ChatView  │  │Scheduled │  │ CreateTask   │   │
-│  │          │  │ + AlertBar│  │  Page    │  │   Modal      │   │
-│  └────┬─────┘  └─────┬─────┘  └────┬─────┘  └──────┬───────┘   │
-│       │              │              │               │           │
-│  ┌────┴──────────────┴──────────────┴───────────────┴────────┐  │
-│  │                     SIDEBAR                               │  │
-│  │  ┌──────────┐  ┌───────────────┐  ┌────────────────────┐  │  │
-│  │  │ Recents  │  │  Most Used    │  │    Navigation      │  │  │
-│  │  │ (hover   │  │  (hover steps │  │  (New task, Sched) │  │  │
-│  │  │  badges) │  │   + automate) │  │                    │  │  │
-│  │  └──────────┘  └───────────────┘  └────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-├──────────────────────────────────────────────────────────────────┤
-│                        STATE LAYER (App.jsx)                     │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                  Centralized State                        │   │
-│  │                                                          │   │
-│  │  sessions[]        ─ All chat sessions + messages        │   │
-│  │  workflowCounts{}  ─ Global workflow frequency tracker   │   │
-│  │  scheduledTasks[]  ─ Persisted automation tasks          │   │
-│  │  globalMessageCount─ Cross-session user message counter  │   │
-│  │  globalAlertState  ─ 90% usage alert (A/B)               │   │
-│  │  toastMessage      ─ ×3 workflow notification            │   │
-│  └────────────────────────┬─────────────────────────────────┘   │
-│                           │                                     │
-├───────────────────────────┼──────────────────────────────────────┤
-│                    INTELLIGENCE LAYER                            │
-│                                                                  │
-│  ┌────────────────────────┴─────────────────────────────────┐   │
-│  │              Workflow Detector Engine                      │   │
-│  │              (workflowDetector.js)                         │   │
-│  │                                                          │   │
-│  │  ┌─────────────────┐  ┌────────────────┐                │   │
-│  │  │ Sequential      │  │ Deliverable    │                │   │
-│  │  │ Structure Check │  │ Keyword Check  │                │   │
-│  │  │ (first/then/    │  │ (report/brief/ │                │   │
-│  │  │  next/finally)  │  │  PDF/doc/etc)  │                │   │
-│  │  └────────┬────────┘  └───────┬────────┘                │   │
-│  │           │    BOTH required  │                          │   │
-│  │           └────────┬──────────┘                          │   │
-│  │                    ▼                                     │   │
-│  │  ┌─────────────────────────────────────┐                │   │
-│  │  │       Rule Classification           │                │   │
-│  │  │                                     │                │   │
-│  │  │  Rule 1: Competitor/Benchmark       │                │   │
-│  │  │  Rule 2: Sprint Retro/Team Review   │                │   │
-│  │  │  Rule 3: Dynamic (topic-derived)    │                │   │
-│  │  └─────────────────────────────────────┘                │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+Input: User prompt text
+  ↓
+Check 1: Sequential Structure? (first/then/next + action verbs)
+  ↓
+Check 2: Final Deliverable? (report/brief/PDF/doc)
+  ↓
+Both pass → Classify (Rule 1/2/3) → Generate steps → Return WorkflowInstance
+Either fails → Return null (not a workflow)
 ```
 
----
+**Rule Classification:**
+| Rule | Keywords | Output Name |
+|------|----------|-------------|
+| Rule 1 | competitor, benchmark, market analysis | Competitor Brief workflow |
+| Rule 2 | sprint retro, blockers, team feedback | Sprint Retro workflow |
+| Rule 3 | Dynamic — email, feedback, social, data, etc. | Topic-based naming |
 
-## 3. Component Architecture
+### 5. Session Store
+In-memory storage for all session data:
 
 ```
-App.jsx (State Hub)
-├── Sidebar
-│   ├── Navigation (New task, Projects, Scheduled, etc.)
-│   ├── RecentsSection (session list + hover workflow badges)
-│   └── MostUsedSection (workflow aggregation + hover steps + automate)
-│
-├── HomeView (initial prompt input)
-├── ChatView (messages + AlertBar)
-│   ├── ChatInput (message composer)
-│   └── AlertBar (90% usage — State A or B)
-│
-├── ScheduledPage (task cards + empty state)
-│   └── TaskCard (individual scheduled task)
-│
-├── CreateTaskModal (task creation form)
-└── Toast Popup (×3 automation nudge)
-```
+Session {
+  id: UUID
+  title: string (first 9 words)
+  messages: Message[]
+  detectedWorkflows: WorkflowInstance[]
+}
 
----
-
-## 4. Data Models
-
-### Session
-```js
-{
-  id: UUID,
-  title: string,                    // First 9 words of first prompt
-  messages: Message[],              // All user + Claude messages
-  detectedWorkflows: WorkflowInstance[]  // Workflows found in this session
+Message {
+  id: UUID
+  role: 'user' | 'claude'
+  text: string
+  workflowInstance: WorkflowInstance | null
 }
 ```
 
-### Message
-```js
-{
-  id: UUID,
-  role: 'user' | 'claude',
-  text: string,
-  workflowInstance: WorkflowInstance | null  // Attached if detected
+### 6. Workflow Counter
+Tracks how many times each workflow type has been used globally:
+
+```
+workflowCounts: {
+  "rule1": 3,                              // Competitor Brief used 3×
+  "rule2": 2,                              // Sprint Retro used 2×
+  "rule3_Email Summary workflow": 1,       // Email Summary used 1×
+  "rule3_Campaign Brief workflow": 2       // Campaign Brief used 2×
 }
 ```
 
-### WorkflowInstance
-```js
-{
-  id: UUID,
-  promptText: string,               // Original user prompt
-  steps: string[4],                 // 4 extracted action steps
-  ruleKey: 'rule1' | 'rule2' | 'rule3',
-  workflowName: string              // e.g., "Competitor Brief workflow"
-}
-```
+### 7. Sidebar UI
+Two dynamic sections powered by state:
 
-### ScheduledTask
-```js
-{
-  id: UUID,
-  name: string,
-  description: string,
-  prompt: string,
-  frequency: 'Manual' | 'Hourly' | 'Daily' | 'Weekdays' | 'Weekly',
-  time: string | null,
+- **Recents:** Lists all sessions. Hover → shows workflow name badges (deduplicated)
+- **Most Used Today:** Shows workflows with count ≥ 2. Hover → shows 4 steps. Count ≥ 3 → "Automate" badge
+
+### 8. Alert System
+Triggers when `globalMessageCount ≥ 10`:
+
+| Condition | State | Message |
+|-----------|-------|---------|
+| Last msg is workflow + used ≥2× before | **A** | "You've used this workflow before — Automate →" |
+| Last msg is workflow + first time | **B** | "You've used 90% of your session limit" |
+| Last msg is NOT a workflow | **B** | "You've used 90% of your session limit" |
+
+**Toast Popup:** Fires when any workflow reaches exactly ×3 usage. Auto-dismisses after 5 seconds.
+
+### 9. Task Scheduler
+Stores automation tasks created via the Create Task Modal:
+
+```
+ScheduledTask {
+  id: UUID
+  name: string
+  description: string
+  prompt: string
+  frequency: 'Manual' | 'Hourly' | 'Daily' | 'Weekdays' | 'Weekly'
+  time: string | null
   workflowName: string
 }
 ```
 
----
+### 10. Create Task Modal
+Entry points:
+- Alert State A → "Automate →" button
+- Most Used section → "Automate" badge
+- Scheduled page → "New task" button
 
-## 5. Workflow Detection Engine
+Pre-fills name and prompt from workflow data when triggered from automation flow.
 
-### Detection Pipeline
-
-```
-User Prompt
-    │
-    ▼
-┌──────────────────────┐     ┌──────────────────────┐
-│ Sequential Structure │ AND │  Final Deliverable    │
-│ Check                │     │  Check                │
-│                      │     │                       │
-│ Keywords:            │     │ Keywords:             │
-│ first, then, next,   │     │ as a PDF, as a report,│
-│ after that, finally  │     │ format the output,    │
-│                      │     │ produce a report, etc.│
-│ OR 2+ action verbs:  │     │                       │
-│ research, analyze,   │     │                       │
-│ compare, draft, etc. │     │                       │
-└──────────┬───────────┘     └──────────┬────────────┘
-           │        BOTH PASS           │
-           └────────────┬───────────────┘
-                        ▼
-              ┌─────────────────┐
-              │ Rule Classifier │
-              │                 │
-              │ Rule 1 keywords?│──▶ Competitor Brief
-              │ Rule 2 keywords?│──▶ Sprint Retro
-              │ Neither?        │──▶ Rule 3 (Dynamic)
-              └────────┬────────┘
-                       ▼
-              ┌─────────────────┐
-              │  Step Generator │
-              │                 │
-              │ Rule 1/2: Fixed │
-              │ Rule 3: Parsed  │
-              │ from prompt     │
-              └─────────────────┘
-```
-
-### Rule 3 — Dynamic Workflow Naming
-When no specific rule matches, the workflow name is derived from topic keywords:
-- `email/inbox` → Email Summary workflow
-- `feedback/survey` → Feedback Analysis workflow
-- `social/campaign` → Campaign Brief workflow
-- `data/metric` → Data Report workflow
-- `user/customer` → User Research workflow
-- `code/technical` → Tech Review workflow
+### 11. Scheduled Page
+Displays all saved tasks as cards with name, frequency badge, and time. Includes "Keep awake" toggle and empty state illustration.
 
 ---
 
-## 6. Alert & Notification System
-
-### 90% Usage Alert (Global Counter)
-
-| Condition | Alert State | Display |
-|-----------|-------------|---------|
-| 10th user message + last msg IS a workflow + used ≥2× before | **State A** | "You've used a similar workflow before — Automate →" |
-| 10th user message + last msg IS a workflow + first use | **State B** | "You've used 90% of your session limit" |
-| 10th user message + last msg NOT a workflow | **State B** | "You've used 90% of your session limit" |
-
-### Toast Notification (×3 Trigger)
-- Fires when any workflow type reaches exactly **3 uses**
-- Auto-dismisses after **5 seconds**
-- Message: `You've used "X workflow" 3 times today — you can automate it from Most Used section`
-
-### Automate Badge (Sidebar)
-- Appears in Most Used section when workflow count ≥ 3
-- Click opens CreateTaskModal pre-filled with workflow data
-
----
-
-## 7. State Management Flow
+## Data Flow
 
 ```
 User types prompt
-       │
-       ├──▶ detectWorkflow(promptText)
-       │         │
-       │         ├── null (not a workflow)
-       │         └── WorkflowInstance (is a workflow)
-       │
-       ├──▶ Update session.messages
-       ├──▶ Update session.detectedWorkflows
-       ├──▶ Increment workflowCounts[key]
-       ├──▶ Increment globalMessageCount
-       │
-       ├──▶ Check: count === 3? → Fire toast
-       ├──▶ Check: globalMessageCount ≥ 10? → Fire 90% alert
-       │         └── Determine State A vs B
-       │
-       └──▶ Claude auto-responds (1s delay)
-                  │
-                  └── Does NOT increment globalMessageCount
+    │
+    ├──→ workflowDetector.detectWorkflow(text)
+    │         ├── null → regular message
+    │         └── WorkflowInstance → workflow detected
+    │
+    ├──→ State Updates:
+    │       • session.messages += userMsg
+    │       • session.detectedWorkflows += workflow
+    │       • workflowCounts[key] += 1
+    │       • globalMessageCount += 1
+    │
+    ├──→ Notification Checks:
+    │       • count === 3? → Toast popup (5s)
+    │       • globalMessages ≥ 10? → Alert bar (A or B)
+    │
+    └──→ UI Re-renders:
+            • Sidebar: Recents + Most Used
+            • Chat: new message bubble
+            • Alert bar (if triggered)
+            • Toast (if triggered)
 ```
 
 ---
 
-## 8. Technology Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | React 18 (Functional Components) |
+| UI Framework | React 18 |
 | Build Tool | Vite 8 |
-| State Management | React useState + useCallback + useEffect |
-| Styling | Vanilla CSS with Atlassian Design Tokens |
-| Routing | Simulated (currentPage state) |
+| Styling | Vanilla CSS + Atlassian Design Tokens |
+| State | React useState + useCallback + useEffect |
 | IDs | crypto.randomUUID() |
-| Persistence | In-memory (no localStorage yet) |
-
----
-
-## 9. Future Architecture Considerations
-
-### Backend Integration
-- Replace `detectWorkflow()` with LLM-based semantic analysis
-- Replace simulated Claude responses with actual API calls
-- Store sessions/tasks in a database
-
-### Persistence Layer
-- `localStorage` for session/task persistence across refreshes
-- IndexedDB for larger datasets
-
-### Enhanced Detection
-- ML-based workflow similarity scoring (instead of keyword matching)
-- User-defined custom workflow templates
-- Cross-user workflow pattern sharing
+| Deployment | Vercel |
+| Version Control | Git + GitHub |
