@@ -90,24 +90,29 @@ export default function App() {
       }
       const newGlobalCount = prev.globalMessageCount + 1
 
-      // Check 90% alert on user message count
+      // Check 90% alert on user message count — re-evaluate on every message after 10
       let globalAlertShown = prev.globalAlertShown
       let globalAlertState = prev.globalAlertState
       let globalAlertWorkflow = prev.globalAlertWorkflow
-      if (newGlobalCount >= 10 && !prev.globalAlertShown) {
+      let globalAlertDismissed = prev.globalAlertDismissed
+      if (newGlobalCount >= 10) {
         globalAlertShown = true
+        let newState = 'B'
+        let newWorkflow = null
         if (workflowInstance) {
           const wfKey = getWorkflowCountKey(workflowInstance)
           const gcCount = newCounts[wfKey] || 0
           if (gcCount >= 2) {
-            globalAlertState = 'A'
-            globalAlertWorkflow = workflowInstance
-          } else {
-            globalAlertState = 'B'
+            newState = 'A'
+            newWorkflow = workflowInstance
           }
-        } else {
-          globalAlertState = 'B'
         }
+        // Reset dismissed if state changed so new alert shows
+        if (newState !== prev.globalAlertState) {
+          globalAlertDismissed = false
+        }
+        globalAlertState = newState
+        globalAlertWorkflow = newWorkflow
       }
 
       return {
@@ -122,6 +127,7 @@ export default function App() {
         globalAlertShown,
         globalAlertState,
         globalAlertWorkflow,
+        globalAlertDismissed,
       }
     })
 
@@ -187,27 +193,32 @@ export default function App() {
         }
       })
 
-      // Check 90% alert on user message count
+      // Check 90% alert on user message count — re-evaluate on every message after 10
       let globalAlertShown = prev.globalAlertShown
       let globalAlertState = prev.globalAlertState
       let globalAlertWorkflow = prev.globalAlertWorkflow
-      if (newGlobalCount >= 10 && !prev.globalAlertShown) {
+      let globalAlertDismissed = prev.globalAlertDismissed
+      if (newGlobalCount >= 10) {
         globalAlertShown = true
+        let newState = 'B'
+        let newWorkflow = null
         if (workflowInstance) {
           const wfKey = getWorkflowCountKey(workflowInstance)
           const gcCount = newCounts[wfKey] || 0
           if (gcCount >= 2) {
-            globalAlertState = 'A'
-            globalAlertWorkflow = workflowInstance
-          } else {
-            globalAlertState = 'B'
+            newState = 'A'
+            newWorkflow = workflowInstance
           }
-        } else {
-          globalAlertState = 'B'
         }
+        // Reset dismissed if state changed so new alert shows
+        if (newState !== prev.globalAlertState) {
+          globalAlertDismissed = false
+        }
+        globalAlertState = newState
+        globalAlertWorkflow = newWorkflow
       }
 
-      return { ...prev, sessions, workflowCounts: newCounts, globalMessageCount: newGlobalCount, toastMessage, toastWorkflow, globalAlertShown, globalAlertState, globalAlertWorkflow }
+      return { ...prev, sessions, workflowCounts: newCounts, globalMessageCount: newGlobalCount, toastMessage, toastWorkflow, globalAlertShown, globalAlertState, globalAlertWorkflow, globalAlertDismissed }
     })
 
     // Claude responds after 1s

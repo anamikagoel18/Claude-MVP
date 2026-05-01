@@ -8,11 +8,16 @@
 
 // Sequential structure keywords
 const SEQUENTIAL_KEYWORDS = [
-  'first', 'then', 'next', 'after that', 'finally', 'step 1', 'step 2',
-  'following that', 'once done', 'afterwards', 'subsequently'
+  'first', 'then', 'next', 'after that', 'finally',
+  'step 1', 'step 2', 'step 3', 'step 4', 'step 5',
+  'following that', 'once done', 'afterwards', 'subsequently',
+  'second', 'third', 'fourth', 'fifth',
+  'phase 1', 'phase 2', 'phase 3',
+  'part 1', 'part 2', 'part 3',
+  'to start', 'to begin', 'lastly', 'in the end'
 ];
 
-// Final deliverable keywords
+// Final deliverable keywords (phrases)
 const DELIVERABLE_KEYWORDS = [
   'as a pdf', 'as a brief', 'as a report', 'as a summary', 'as a doc',
   'as a document', 'share with my team', 'format the output', 'format it as',
@@ -22,7 +27,18 @@ const DELIVERABLE_KEYWORDS = [
   'into a brief', 'into a summary', 'into a document', 'formatted report',
   'formatted brief', 'formatted summary', 'output as', 'deliver as',
   'summary doc', 'summary report', 'summary brief',
-  'format as a', 'format as an'
+  'format as a', 'format as an',
+  'summary pdf', 'audit summary', 'roadmap doc', 'roadmap document',
+  'create a', 'generate a', 'produce a', 'build a'
+];
+
+// Standalone deliverable nouns — checked in the LAST step/segment only
+const DELIVERABLE_NOUNS = [
+  'pdf', 'report', 'brief', 'summary', 'doc', 'document',
+  'spreadsheet', 'dashboard', 'presentation', 'deck', 'memo',
+  'template', 'playbook', 'runbook', 'checklist', 'roadmap',
+  'plan', 'proposal', 'audit', 'review', 'analysis',
+  'overview', 'digest', 'newsletter', 'guide'
 ];
 
 // Rule 1 — competitor / product / roadmap / benchmarking keywords
@@ -48,15 +64,24 @@ const RULE2_KEYWORDS = [
  */
 function hasSequentialStructure(text) {
   const lower = text.toLowerCase();
+
   // Check for explicit sequential keywords
   const hasKeyword = SEQUENTIAL_KEYWORDS.some(kw => lower.includes(kw));
   if (hasKeyword) return true;
 
-  // Check for multiple action verbs chained (heuristic: 3+ action-like words + comma or "and")
+  // Check for "Step N:" pattern (e.g., "Step 1: do X, Step 2: do Y")
+  const stepPattern = /step\s*\d/gi;
+  const stepMatches = lower.match(stepPattern);
+  if (stepMatches && stepMatches.length >= 2) return true;
+
+  // Check for multiple action verbs chained (heuristic: 2+ action verbs)
   const actionVerbs = ['research', 'analyze', 'analyse', 'gather', 'collect', 'compile',
     'compare', 'review', 'summarize', 'summarise', 'write', 'draft', 'create', 'build',
     'generate', 'format', 'extract', 'identify', 'document', 'prepare', 'pull', 'find',
-    'search', 'check', 'scan', 'look up', 'upload', 'download', 'send', 'share'];
+    'search', 'check', 'scan', 'look up', 'upload', 'download', 'send', 'share',
+    'categorize', 'categorise', 'prioritize', 'prioritise', 'estimate', 'assess',
+    'evaluate', 'audit', 'map', 'outline', 'list', 'rank', 'sort', 'filter',
+    'consolidate', 'aggregate', 'synthesize', 'synthesise', 'benchmark'];
   const matches = actionVerbs.filter(v => lower.includes(v));
   return matches.length >= 2;
 }
@@ -66,7 +91,22 @@ function hasSequentialStructure(text) {
  */
 function hasFinalDeliverable(text) {
   const lower = text.toLowerCase();
-  return DELIVERABLE_KEYWORDS.some(kw => lower.includes(kw));
+
+  // Check phrase-level deliverable keywords
+  if (DELIVERABLE_KEYWORDS.some(kw => lower.includes(kw))) return true;
+
+  // Check if the LAST segment/step contains a standalone deliverable noun
+  // Split by step patterns, commas+and, or sequential connectors
+  const segments = text.split(/(?:step\s*\d\s*[:.]|,\s*(?:and\s+)?|;\s*|\bthen\b|\bnext\b|\bfinally\b|\blastly\b)/i)
+    .map(s => s.trim())
+    .filter(s => s.length > 3);
+  
+  if (segments.length >= 2) {
+    const lastSegment = segments[segments.length - 1].toLowerCase();
+    if (DELIVERABLE_NOUNS.some(noun => lastSegment.includes(noun))) return true;
+  }
+
+  return false;
 }
 
 /**
@@ -86,11 +126,11 @@ function generateCustomSteps(text) {
   const lower = text.toLowerCase();
 
   // Extract meaningful action phrases from the prompt
-  // Split by sequential connectors to get individual step descriptions
-  const connectorPattern = /(?:first[,\s]+|then[,\s]+|next[,\s]+|after that[,\s]+|finally[,\s]+|,\s*(?:and\s+)?)/gi;
+  // Split by Step N:, sequential connectors, or commas
+  const connectorPattern = /(?:step\s*\d\s*[:.]\s*|first[,:\s]+|then[,:\s]+|next[,:\s]+|second(?:ly)?[,:\s]+|third(?:ly)?[,:\s]+|fourth(?:ly)?[,:\s]+|after that[,:\s]+|finally[,:\s]+|lastly[,:\s]+|,\s*(?:and\s+)?)/gi;
   const parts = text.split(connectorPattern)
     .map(p => p.trim())
-    .filter(p => p.length > 5 && p.length < 80);
+    .filter(p => p.length > 5 && p.length < 100);
 
   // Build 4 meaningful steps
   let steps = [];
@@ -174,11 +214,17 @@ function getWorkflowName(ruleKey, promptText) {
   if (lower.includes('email') || lower.includes('inbox')) return 'Email Summary workflow';
   if (lower.includes('survey') || lower.includes('feedback')) return 'Feedback Analysis workflow';
   if (lower.includes('content') || lower.includes('blog') || lower.includes('article')) return 'Content Pipeline workflow';
-  if (lower.includes('data') || lower.includes('metric')) return 'Data Report workflow';
-  if (lower.includes('social') || lower.includes('campaign')) return 'Campaign Brief workflow';
-  if (lower.includes('user') || lower.includes('customer')) return 'User Research workflow';
-  if (lower.includes('code') || lower.includes('technical')) return 'Tech Review workflow';
+  if (lower.includes('expense') || lower.includes('budget') || lower.includes('financial') || lower.includes('audit') || lower.includes('revenue')) return 'Financial Audit workflow';
+  if (lower.includes('product') || lower.includes('roadmap') || lower.includes('feature request')) return 'Product Roadmap workflow';
+  if (lower.includes('sales') || lower.includes('pipeline') || lower.includes('deal') || lower.includes('crm')) return 'Sales Report workflow';
+  if (lower.includes('onboarding') || lower.includes('hiring') || lower.includes('recruit') || lower.includes('hr')) return 'HR Workflow';
+  if (lower.includes('data') || lower.includes('metric') || lower.includes('analytics')) return 'Data Report workflow';
+  if (lower.includes('social') || lower.includes('campaign') || lower.includes('marketing')) return 'Campaign Brief workflow';
+  if (lower.includes('user') || lower.includes('customer') || lower.includes('interview')) return 'User Research workflow';
+  if (lower.includes('code') || lower.includes('technical') || lower.includes('api')) return 'Tech Review workflow';
   if (lower.includes('research')) return 'Research Pipeline workflow';
+  if (lower.includes('security') || lower.includes('compliance') || lower.includes('risk')) return 'Security Audit workflow';
+  if (lower.includes('training') || lower.includes('learning') || lower.includes('course')) return 'Training Plan workflow';
   return 'Custom workflow';
 }
 
