@@ -36,25 +36,17 @@ function SessionItem({ session, isActive, onSelect }) {
         </div>
       </div>
 
-      {/* Hover expand — only if this session has detected workflows */}
+      {/* Hover expand — only show workflow NAME badges, no steps */}
       {hasWorkflows && (
         <div className={`session-expand ${hovered ? 'session-expand--open' : ''}`}>
-          {uniqueWorkflows.map((wf) => (
-            <div key={wf.id} className="workflow-expand-block">
-              <div className="workflow-expand-label">
+          <div className="session-workflow-tags">
+            {uniqueWorkflows.map((wf) => (
+              <span key={wf.id} className="session-wf-badge">
                 <CheckIcon />
                 {wf.workflowName}
-              </div>
-              <ul className="workflow-steps">
-                {wf.steps.map((step, i) => (
-                  <li key={i} className="workflow-step">
-                    <span className="step-number">{i + 1}</span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </li>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Sidebar from './components/Sidebar/Sidebar'
 import HomeView from './components/Home/HomeView'
 import ChatView from './components/Chat/ChatView'
@@ -10,16 +10,32 @@ import { detectWorkflow, generateSessionTitle } from './utils/workflowDetector'
 const initialState = {
   sessions: [],
   activeSessionId: null,
-  // workflowCounts: { rule1: 0, rule2: 0, rule3_<name>: 0 }
   workflowCounts: {},
   scheduledTasks: [],
-  currentPage: 'home', // 'home' | 'chat' | 'scheduled'
+  currentPage: 'home',
   showModal: false,
-  pendingAutomateWorkflow: null, // WorkflowInstance for modal pre-fill
+  pendingAutomateWorkflow: null,
+  globalMessageCount: 0,       // total messages across ALL sessions
+  globalAlertShown: false,     // 90% alert fires once globally
+  globalAlertState: null,
+  globalAlertWorkflow: null,
+  globalAlertDismissed: false,
+  toastMessage: null,          // toast popup text
+  toastWorkflow: null,         // workflow name for toast
 }
 
 export default function App() {
   const [state, setState] = useState(initialState)
+
+  // Auto-dismiss toast after 5 seconds
+  useEffect(() => {
+    if (state.toastMessage) {
+      const timer = setTimeout(() => {
+        setState(prev => ({ ...prev, toastMessage: null, toastWorkflow: null }))
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [state.toastMessage])
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -57,23 +73,55 @@ export default function App() {
       title,
       messages: [userMsg],
       detectedWorkflows: workflowInstance ? [workflowInstance] : [],
-      alertShown: false,
-      alertState: null,
-      alertDismissed: false,
     }
 
     setState(prev => {
       const newCounts = { ...prev.workflowCounts }
+      let toastMessage = prev.toastMessage
+      let toastWorkflow = prev.toastWorkflow
       if (workflowInstance) {
         const key = getWorkflowCountKey(workflowInstance)
         newCounts[key] = (newCounts[key] || 0) + 1
+        // Toast when workflow reaches exactly ×3
+        if (newCounts[key] === 3) {
+          toastMessage = `You've used "${workflowInstance.workflowName}" 3 times today — you can automate it from Most Used section`
+          toastWorkflow = workflowInstance.workflowName
+        }
       }
+      const newGlobalCount = prev.globalMessageCount + 1
+
+      // Check 90% alert on user message count
+      let globalAlertShown = prev.globalAlertShown
+      let globalAlertState = prev.globalAlertState
+      let globalAlertWorkflow = prev.globalAlertWorkflow
+      if (newGlobalCount >= 10 && !prev.globalAlertShown) {
+        globalAlertShown = true
+        if (workflowInstance) {
+          const wfKey = getWorkflowCountKey(workflowInstance)
+          const gcCount = newCounts[wfKey] || 0
+          if (gcCount >= 2) {
+            globalAlertState = 'A'
+            globalAlertWorkflow = workflowInstance
+          } else {
+            globalAlertState = 'B'
+          }
+        } else {
+          globalAlertState = 'B'
+        }
+      }
+
       return {
         ...prev,
         sessions: [newSession, ...prev.sessions],
         activeSessionId: sessionId,
         currentPage: 'chat',
         workflowCounts: newCounts,
+        globalMessageCount: newGlobalCount,
+        toastMessage,
+        toastWorkflow,
+        globalAlertShown,
+        globalAlertState,
+        globalAlertWorkflow,
       }
     })
 
@@ -95,34 +143,9 @@ export default function App() {
     setState(prev => {
       const sessions = prev.sessions.map(s => {
         if (s.id !== sessionId) return s
-        const updatedMessages = [...s.messages, claudeMsg]
-        const totalMessages = updatedMessages.length
-
-        // Check 90% alert: fires at exactly 10 total messages
-        let alertShown = s.alertShown
-        let alertState = s.alertState
-        let alertWorkflow = s.alertWorkflow || null
-        if (totalMessages >= 10 && !s.alertShown) {
-          alertShown = true
-          const lastUserMsg = [...updatedMessages].reverse().find(m => m.role === 'user')
-          if (lastUserMsg && lastUserMsg.workflowInstance) {
-            // Last message IS a workflow — check if used before (count >= 2)
-            const wfKey = getWorkflowCountKey(lastUserMsg.workflowInstance)
-            const globalCount = prev.workflowCounts[wfKey] || 0
-            if (globalCount >= 2) {
-              alertState = 'A'
-              alertWorkflow = lastUserMsg.workflowInstance
-            } else {
-              // First time using this workflow — simple message
-              alertState = 'B'
-            }
-          } else {
-            alertState = 'B'
-          }
-        }
-
-        return { ...s, messages: updatedMessages, alertShown, alertState, alertWorkflow }
+        return { ...s, messages: [...s.messages, claudeMsg] }
       })
+      // Don't increment globalMessageCount for Claude responses
       return { ...prev, sessions }
     })
   }, [])
@@ -140,10 +163,18 @@ export default function App() {
       }
 
       const newCounts = { ...prev.workflowCounts }
+      let toastMessage = prev.toastMessage
+      let toastWorkflow = prev.toastWorkflow
       if (workflowInstance) {
         const key = getWorkflowCountKey(workflowInstance)
         newCounts[key] = (newCounts[key] || 0) + 1
+        if (newCounts[key] === 3) {
+          toastMessage = `You've used "${workflowInstance.workflowName}" 3 times today — you can automate it from Most Used section`
+          toastWorkflow = workflowInstance.workflowName
+        }
       }
+
+      const newGlobalCount = prev.globalMessageCount + 1
 
       const sessions = prev.sessions.map(s => {
         if (s.id !== prev.activeSessionId) return s
@@ -156,7 +187,27 @@ export default function App() {
         }
       })
 
-      return { ...prev, sessions, workflowCounts: newCounts }
+      // Check 90% alert on user message count
+      let globalAlertShown = prev.globalAlertShown
+      let globalAlertState = prev.globalAlertState
+      let globalAlertWorkflow = prev.globalAlertWorkflow
+      if (newGlobalCount >= 10 && !prev.globalAlertShown) {
+        globalAlertShown = true
+        if (workflowInstance) {
+          const wfKey = getWorkflowCountKey(workflowInstance)
+          const gcCount = newCounts[wfKey] || 0
+          if (gcCount >= 2) {
+            globalAlertState = 'A'
+            globalAlertWorkflow = workflowInstance
+          } else {
+            globalAlertState = 'B'
+          }
+        } else {
+          globalAlertState = 'B'
+        }
+      }
+
+      return { ...prev, sessions, workflowCounts: newCounts, globalMessageCount: newGlobalCount, toastMessage, toastWorkflow, globalAlertShown, globalAlertState, globalAlertWorkflow }
     })
 
     // Claude responds after 1s
@@ -171,33 +222,9 @@ export default function App() {
 
         const sessions = prev.sessions.map(s => {
           if (s.id !== prev.activeSessionId) return s
-          const updatedMessages = [...s.messages, claudeMsg]
-          const totalMessages = updatedMessages.length
-
-          let alertShown = s.alertShown
-          let alertState = s.alertState
-          let alertWorkflow = s.alertWorkflow || null
-          if (totalMessages >= 10 && !s.alertShown) {
-            alertShown = true
-            const lastUserMsg = [...updatedMessages].reverse().find(m => m.role === 'user')
-            if (lastUserMsg && lastUserMsg.workflowInstance) {
-              // Last message IS a workflow — check if used before (count >= 2)
-              const wfKey = getWorkflowCountKey(lastUserMsg.workflowInstance)
-              const globalCount = prev.workflowCounts[wfKey] || 0
-              if (globalCount >= 2) {
-                alertState = 'A'
-                alertWorkflow = lastUserMsg.workflowInstance
-              } else {
-                // First time using this workflow — simple message
-                alertState = 'B'
-              }
-            } else {
-              alertState = 'B'
-            }
-          }
-
-          return { ...s, messages: updatedMessages, alertShown, alertState, alertWorkflow }
+          return { ...s, messages: [...s.messages, claudeMsg] }
         })
+        // Don't increment globalMessageCount for Claude responses
         return { ...prev, sessions }
       })
     }, 1000)
@@ -221,12 +248,11 @@ export default function App() {
   }, [])
 
   const dismissAlert = useCallback(() => {
-    setState(prev => {
-      const sessions = prev.sessions.map(s =>
-        s.id === prev.activeSessionId ? { ...s, alertDismissed: true } : s
-      )
-      return { ...prev, sessions }
-    })
+    setState(prev => ({ ...prev, globalAlertDismissed: true }))
+  }, [])
+
+  const dismissToast = useCallback(() => {
+    setState(prev => ({ ...prev, toastMessage: null, toastWorkflow: null }))
   }, [])
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -310,6 +336,8 @@ export default function App() {
     }))
   }, [])
 
+  const showGlobalAlert = state.globalAlertShown && !state.globalAlertDismissed
+
   return (
     <div className="app-layout">
       <Sidebar
@@ -336,11 +364,25 @@ export default function App() {
             onSendMessage={sendMessage}
             onDismissAlert={dismissAlert}
             onAutomate={openAutomateModal}
+            showAlert={showGlobalAlert}
+            alertState={state.globalAlertState}
+            alertWorkflow={state.globalAlertWorkflow}
           />
         ) : (
           <HomeView onSendMessage={createNewSession} />
         )}
       </main>
+
+      {/* Toast popup — auto-dismiss after 6 seconds */}
+      {state.toastMessage && (
+        <div className="toast-popup" id="workflow-toast">
+          <div className="toast-content">
+            <span className="toast-icon">⚡</span>
+            <span className="toast-text">{state.toastMessage}</span>
+            <button className="toast-close" onClick={dismissToast} aria-label="Close">×</button>
+          </div>
+        </div>
+      )}
 
       {state.showModal && (
         <CreateTaskModal

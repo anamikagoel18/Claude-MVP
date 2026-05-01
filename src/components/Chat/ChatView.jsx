@@ -49,17 +49,15 @@ export default function ChatView({
   onSendMessage,
   onDismissAlert,
   onAutomate,
+  showAlert,
+  alertState,
+  alertWorkflow,
 }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [session.messages])
-
-  // The workflow attached to the alert (set only when State A)
-  const alertWorkflow = session.alertWorkflow || null
-
-  const showAlert = session.alertShown && !session.alertDismissed
 
   return (
     <div className="chat-view">
@@ -77,7 +75,7 @@ export default function ChatView({
       <div className="chat-bottom">
         {showAlert && (
           <AlertBar
-            alertState={session.alertState}
+            alertState={alertState}
             workflow={alertWorkflow}
             onDismiss={onDismissAlert}
             onAutomate={() => alertWorkflow && onAutomate(alertWorkflow)}
